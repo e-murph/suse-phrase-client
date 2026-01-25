@@ -1,0 +1,157 @@
+= SAML (ADFS)
+:revdate: 2025-05-08
+:page-revdate: {revdate}
+:page-opendocs-origin: /08.integration/06.adfs/06.adfs.md
+:page-opendocs-slug:  /integration/adfs
+
+== 设置 ADFS 和{product-name} 集成
+
+本节首先介绍 ADFS 的设置步骤，然后介绍{product-name} 控制台的设置步骤。
+
+=== ADFS 设置
+
+. 从 AD FS Management，右键单击"`Relying Party Trusts`" 并选择"`Add Relying Party Trust...`" 。
++
+image:adfs1.png[adfsSetup]
+
+. 从欢迎步骤中选择"`Start`" 按钮。
++
+image:adfs2.png[adfsSetup]
+
+. 选择"`Enter data about the relying party manually`" 并选择"`Next`" 。
++
+image:adfs3.png[adfsSetup]
+
+. 在 "显示名称 "字段中输入一个唯一的名称，然后选择"`Next`" 。
++
+image:adfs4.png[adfsSetup]
+
+. 选择"`Next`" 跳过令牌加密。
++
+image:adfs5.png[adfsSetup]
+
+. 选中"`Enable support for the SAML 2.0 WebSSO protocol`" ，并将{product-name} 设置>SAML 设置页面中的 SAML 重定向 URI 输入"`Relying party SAML 2.0 SSO service URL`" 字段。 选择"`Next`" 继续。
++
+image:adfs6.png[adfsSetup]
+
+. 在"`Relying party trust identifier`" 字段中输入相同的 SAML 重定向 URI，然后单击"`Add`" ；然后选择"`Next`" 继续。
++
+image:adfs7.png[adfsSetup]
+
+. 自定义访问控制；然后选择"`Next`" 继续。
++
+image:adfs8.png[adfsSetup]
+
+. 选择"`Next`" 继续。
++
+image:adfs9.png[adfsSetup]
+
+. 选择"`Close`" 完成。
+. 选择编辑索赔发放政策...
++
+image:adfs10-11.png[adfsSetup]
+
+. 选择"`Add Rule...`" 并选择"`Send LDAP Attributes as Claims`" ；然后选择"`Next`" 。 为规则命名，并选择 Active Directory 作为属性存储。如果设置了默认角色，则身份验证只需要用户名，否则角色映射需要组。 电子邮件是可选项。
++
+--
+* SAM-Account-Name-> 用户名
+* 电子邮件地址-> 
+* 令牌组-- 未经校验的名称-> 组
+
+image:adfs11-12.png[adfsSetup]
+--
+. 选择"`Add Rule...`" 并选择"`Transform an Incoming Claim`" ；然后选择"`Next`" 。 为规则命名并设置字段，如下图所示。 传出名称 ID 格式必须是暂存标识符。
++
+image:adfs12-13.png[adfsSetup]
+
+=== {product-name} 设置
+
+. 识别提供商单点登录 URL
+* 从 AD FS Management > Service 查看端点，并使用"`SAML 2.0/WS-Federation`" 端点 URL。
+* 例如 `https://<adfs-fqdn>/adfs/ls`
+
+. 身份供应商
+* 右键单击 AD FS 管理控制台中的 AD FS，选择"`Edit Federation Service Properties...`" ；使用"`Federation Service identifier`" 。
+* 例如 `http://<adfs-fqdn>/adfs/services/trust`
+
+. X.509 Certificate
+* 从 AD FS 管理中，选择服务 > 证书，右键单击令牌签名证书并选择 "`View Certificate...`"
+* 选择 "详细信息 "选项卡，然后单击 "`Copy to File`"
+* 将其保存为 Base-64 编码的 x.509 (.CER) 文件
+* 将文件内容复制并粘贴到 X.509 证书字段中
+
+. 集团索赔
+* 输入组的传出请求名称
+* 例如：小组
+
+. 默认角色
+* 建议使用"`None`" ，除非您想允许任何已通过身份验证的用户使用默认角色。
+
+. 角色地图
+* 为相应角色设置用户组名称。 (见下面的截图示例）。
++
+image:nv_adfs1.png[NVadfsSetup]
+
+=== 将组映射到角色和命名空间
+
+有关如何在{product-name} 中将组映射到预设和自定义角色以及命名空间，请参阅 "xref:users.adoc#_mapping_groups_to_roles_and_namespaces[用户和]角色 "部分。
+
+== 故障排除
+
+. ADFS SamlResponseSignature 需为 MessageOnly 或 MessageAndAssertion。 使用 Get-AdfsRelyingPartyTrust 命令验证或更新。
++
+image:nv_adfs2.png[adfsTroubleshooting]
+
+. Kubernetes 节点 x ADFS 服务器之间的时间同步
+
+要成功进行身份验证，Kubernetess 节点和 ADFS 服务器之间的时间必须一致，以避免时间同步或时钟漂移问题。
+
+建议使用https://en.wikipedia.org/wiki/Network_Time_Protocol[服务器] NTP，所有服务器的时间设置相同。
+
+请检查并确认 ADFS 和{product-name} 主机已同步，且潜在延迟不超过 10 秒。您可以使用 Linux 和 Windows 命令来检查日期、时间和 NTP 服务器活动。
+
+[TIP]
+====
+您可以通过在{product-name} UI 中禁用和再次启用配置来重新加载验证次数，具体方法如下：
+
+* 使用管理员用户登录{product-name} 
+* 转到设置
+* 单击按钮禁用或启用 SAML 设置
+** *确保保留配置设置！*
+
+重新启用设置后，可以尝试使用 ADFS 用户登录。如果成功了，这就证明问题是由于 Kubernetes 节点和 ADFS 服务器之间的时间同步错误造成的。
+====
+
+. {product-name} UI 中的 SAML 字符必须区分大小写
++
+属性名称区分大小写。确保此处配置的任何 SAML 属性名称与应用程序配置完全匹配。SAML 必须指向正确的 URL 才能进行身份验证。
++
+`{product-name} UI -> Settings -> SAML Settings` 中的所有字段都区分大小写。
++
+{product-name} 控制器日志包含与 ADFS 服务器身份验证和错误相关的信息，有助于找出根本原因。我们建议重新创建登录失败条件并检查日志。
+
+. 确保输入正确的组、证书和协议
++
+SAML 设置需要符合以下配置：
++
+|===
+| 设置 | 价值
+
+| 识别提供商单点登录 URL
+| 需要 HTTPS 协议
+
+| 身份供应商
+| 需要 HTTP 协议
+
+| ADFS SamlResponseSignature
+| 需要是 MessageOnly 或 MessageAndAssertion
+|===
+
+[CAUTION]
+====
+这些设置需要在 ADFS 服务器上和{product-name} UI 中进行验证。
+====
+
+所选证书必须有效并正确生成，包括`CA Root` 和`Intermediate Certificates` 。您可以使用受信任的证书颁发机构、Windows 或自动化工具（如https://letsencrypt.org/[LetsEncrypt]）生成这些证书。
+
+如果这些参数中有任何一个不正确，当您尝试使用 SAML 身份验证以 ADFS 用户登录{product-name} 时，就会收到`Authentication Failed` 错误。
