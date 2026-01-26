@@ -1,0 +1,139 @@
+= OpenID Connect Azure/Okta
+:revdate: 2024-09-27
+:page-revdate: {revdate}
+:page-opendocs-origin: /08.integration/07.openid/07.openid.md
+:page-opendocs-slug:  /integration/openid
+
+== OpenID Connect（OIDC for Azure）とOktaの統合
+
+OpenID Connect認証を有効にするには、*Issuer*、*Client ID*、*Client secretの*設定が必要です。発行者のURLで、{product-name} 、Authenorization、Token、User infoのエンドポイントを取得するためにDiscovery APIを呼び出す。
+
+{product-name} OpenID Connect Settingページの上部にあるOpenID Connect Redirect URIを探します。このURIをOktaの*ログインリダイレクトURIと*Microsoft Azureの*返信*URLにコピーする必要があります。
+
+image:openid1.png[OpenID1]
+
+=== Microsoft Azure Configuration
+
+Azure Active Directory > App registrations > Application name > Settings Page で、Application ID string を探す。これは{product-name} でクライアントIDを設定するために使用される。クライアント・シークレットはAzureのKeys設定にある。
+
+image:openid3.png[OpenID3]
+
+発行者のURLは "https://login.microsoftonline.com/{tenantID}/v2.0 "の形式をとります。tenantIDを見つけるには、menu:Azure Active DirectoryProperties[Pageに]アクセスし、Directory IDを見つけ、URLのtenantIDに置き換えてください。
+
+image:openid4.png[OpenID4]
+
+ユーザーがアクティブディレクトリのグループに割り当てられている場合、そのグループメンバーシップをクレームに追加することができる。*Azure Active Directory-> App registrations*でアプリケーションを検索し、マニフェストを編集します。groupMembershipClaims "の値を "Application Group "に変更する。 トークンに含まれるグループの数には上限がある。 ユーザが多数のグループ( > 200)に属しており、"All "が使用されている場合、トークンはグループを含まず、認証は失敗します。 All "の代わりに "Application Group "を使用すると、トークンで返される該当グループの数が減ります。
+
+デフォルトでは、{product-name} 、ユーザーのグループ・メンバーシップを特定するために、クレーム内の "groups "を探す。他のクレーム名を使用する場合は、{product-name}'のOpenID Connect設定ページでクレーム名をカスタマイズできます。
+
+Azureが返すグループクレームは、名前ではなく「オブジェクトID」で識別される。グループのオブジェクト ID は、menu:Azure Active[DirectoryGroups > Group name Page] にあります。{product-name} -> Settingsでグループベースのロールマッピングを構成するには、この値を使用する必要があります。
+
+image:openid5.png[OpenID5]
+
+==== パーミッションの確認
+
+Microsoft Graphから以下のパーミッションが設定されていることを確認してください。
+
+. email - ユーザーのメールアドレスを表示する
+. openid - ユーザーをログインさせる
+. profile - ユーザーの基本プロフィールを見る
+
+=== Oktaの設定
+
+Oktaアカウントにログインします。
+
+左側のメニューで、"`Applications-> Applications "`をクリックし、中央のペインで"`Create App Integration`" をクリックします：
+
+image:okta1.png[create]
+
+"`Sign-in method`" を選択するための新しいペインがポップアップ表示されます：
+
+image:okta2.png[newapp]
+
+"`OIDC -- OpenID Connect`" オプションを選択する。
+
+"`Application Type`" を選択するための派生ペインが表示されます：
+
+image:okta3.png[apptype]
+
+"`Native Application`" オプションを選択する。
+
+中央のペインにネイティブアプリの統合フォームが表示され、以下の値を入力する必要があります：
+
+一般設定のセクション：
+
+アプリ統合名この統合の名称。名称を自由に選択 グラント・タイプ（チェック）：
+
+* 認証コード
+* リフレッシュ・トークン
+* リソース所有者のパスワード
+* インプリシット（ハイブリッド）
+
+サインイン・リダイレクトURIのセクションを参照：
+
+{product-name} コンソールにアクセスし、"`Settings`" -> "`OpenId Connect Settings`" に移動する。 ページの一番上、"`OpenID Connect Redirect URI`" ラベルの横にある"`Copy to Clipboard`" をクリックする。
+
+image:okta4.png[コピー]
+
+これはリダイレクトURIをメモリにコピーする。
+それを対応するテキストボックスに貼り付ける：
+
+image:okta5.png[paste]
+
+アサインメントのセクション
+
+"`Allow everyone in your organization to access`" を選択すると、組織内の全員がこの統合を利用できるようになります。
+
+image:okta6.png[割り当て]
+
+その後、ページ下部の保存ボタンをクリックします。
+
+一般的な設定が保存されると、新しいアプリケーションの統合設定に移動し、クライアントIDが自動的に生成されます。
+
+"`Client Credentials`" セクションで、edit をクリックし、"`Client Authentication`" セクションを"`Use PKCE (for public clients)`" から"`Use Client Authentication`" に修正し、save を押す。これにより新しいシークレットが自動的に生成され、今後の{product-name} セットアップ手順で必要になります：
+
+image:okta7.png[clientauth]
+
+"`Sign On`" 」タブに移動し、「"`OpenID Connect ID Token`" 」セクションを編集する：
+発行元を"`Dynamic (based on request domain)`" から固定"`Okta URL`" に変更する：
+
+image:okta8.png[トークン]
+
+Oktaコンソールは、クラシックモードとデベロッパーモードの2つのモードで操作できます。
+クラシックモードでは、発行者URLはOktaアプリケーションページのサインオンタブにあります。クレームでユーザーのグループメンバーシップを返すには、{product-name} OpenID Connect設定ページで "groups "スコープを追加する必要があります：
+
+image:okta9.png[クレーム]
+
+開発者モードでは、Oktaはクレームをカスタマイズすることができます。これは、APIページで認証サーバーを管理することによって行われます（左側のメニュー-> Security-> APIに移動します）。発行者URLは各認証サーバーのSettingsタブにある：
+
+image:okta10.png[api]
+
+クレームは、ユーザーに関する情報とOIDCサービスに関するメタ情報を含む名前と値のペアである。
+"`OpenID Connect ID Token`" IDトークンはJSONウェブトークンであり、2者間で転送されるクレームをコンパクトなURL-Safeで表現する手段である。特定のスコープが設定されている場合は、{product-name} OpenID Connectの設定ページにそのスコープを追加して、ユーザーが認証された後にクレームを含めることができるようにしてください：
+
+image:okta11.png[スコープ]
+
+デフォルトでは、{product-name} 、ユーザーのグループ・メンバーシップを特定するために、クレーム内の "groups "を探す。他のクレーム名を使用する場合は、{product-name}'のOpenID Connect設定ページでクレーム名をカスタマイズできます。クレームを設定するには、次の画像に示すように、"`OpenID Connect ID Token`" セクションを編集する：
+
+image:okta12.png[クレーム]
+
+アプリケーションの統合ページで、"`Assignments`" タブに移動し、対応する割り当てがリストされていることを確認してください：
+
+image:okta13.png[割り当て]
+
+=== {product-name} OpenID Connectの設定
+
+このページで、適切な発行者URL、クライアントID、クライアントシークレットを設定します。
+
+image:openid9.png[OpenID9]
+
+ユーザーが認証された後、グループベースのロールマッピング設定によって適切なロールを導き出すことができる。グループベースのロールマッピングを設定するには
+
+. グループベースのロール・マッピングが設定されていない場合、または一致するグループが見つからない場合、認証されたユーザにはデフォルト・ロールが割り当てられます。DefaultロールがNoneに設定されている場合、グループベースのロールマッピングに失敗すると、ユーザーはログインできません。
+. AdminとReaderのロールマップでそれぞれグループのリストを指定します。ユーザのグループ・メンバーシップは、ユーザが認証された後、IDトークンのクレームによって返される。一致するグループが見つかれば、対応するロールがユーザーに割り当てられる。
+
+このグループは、{product-name} のAdminロールにマッピングすることができる。個々のユーザを Federated Admin ロールに「昇格」させるには、ローカルのクラスタ管理者としてログインし、Identify プロバイダ「OpenID」でユーザを選択し、Settings-> Users/Roles でロールを編集します。
+
+=== グループをロールと名前空間にマッピングする
+
+{product-name} 、グループをプリセット・ロールやカスタム・ロール、ネームスペースにマッピングする方法については、xref:users.adoc#_mapping_groups_to_roles_and_namespaces[「ユーザーとロール」の]セクションを参照してください。
