@@ -1,0 +1,139 @@
+= OpenID Connect Azure/Okta
+:revdate: 2024-09-27
+:page-revdate: {revdate}
+:page-opendocs-origin: /08.integration/07.openid/07.openid.md
+:page-opendocs-slug:  /integration/openid
+
+== Integração com o OpenID Connect (OIDC) para Azure e Okta
+
+Para ativar a autenticação do OpenID Connect, são necessárias as configurações de *Emissor*, *ID do cliente* e *Segredo do cliente*. Com o URL do emissor, o site {product-name} chamará a API de descoberta para recuperar os endpoints Authenorization, Token e User info.
+
+Localize o URI de redirecionamento do OpenID Connect na parte superior da página {product-name} OpenID Connect Setting. Você precisará copiar esse URI para os *URIs de redirecionamento de login* do Okta e para os *URLs de resposta* do Microsoft Azure.
+
+image:openid1.png[OpenID1]
+
+=== Configuração do Microsoft Azure
+
+Em Azure Active Directory > Registros de aplicativos > Nome do aplicativo > Página de configurações, localize a string ID do aplicativo. Isso é usado para definir o ID do cliente em {product-name}. O segredo do cliente pode ser localizado na configuração de chaves do Azure.
+
+image:openid3.png[OpenID3]
+
+O URL do emissor tem o formato "https://login.microsoftonline.com/{tenantID}/v2.0". Para localizar o tenantID, acesse menu:Azure Active DirectoryProperties[Page] e encontre o Directory ID, substitua-o pelo tenantID no URL
+
+image:openid4.png[OpenID4]
+
+Se os usuários forem atribuídos aos grupos no diretório ativo, sua associação ao grupo poderá ser adicionada à reivindicação. Localize o aplicativo no *Azure Active Directory -> Registros de aplicativos* e edite o manifesto. Modificar o valor de "groupMembershipClaims" para "Application Group".  Há um número máximo de grupos que serão emitidos em um token.  Se o usuário pertencer a um grande número de grupos (> 200) e o valor "All" for usado, o token não incluirá os grupos e a autorização falhará.  O uso do valor "Grupo de aplicativos" em vez de "Todos" reduzirá o número de grupos aplicáveis retornados no token.
+
+Por padrão, o site {product-name} procura por "groups" na reivindicação para identificar a associação do usuário ao grupo. Se outro nome de reivindicação for usado, você poderá personalizar o nome da reivindicação na página de configuração do OpenID Connect do {product-name}.
+
+A reivindicação de grupo retornada pelo Azure é identificada pela "ID do objeto" em vez do nome. O ID do objeto do grupo pode ser localizado em menu:Azure Active[DirectoryGroups > Group name Page]. Você deve usar esse valor para configurar o mapeamento de função baseado em grupo em {product-name} -> Settings.
+
+image:openid5.png[OpenID5]
+
+==== Verificar permissões
+
+Certifique-se de que as seguintes permissões tenham sido definidas no Microsoft Graph
+
+. email - Exibir o endereço de e-mail dos usuários
+. openid - Conectar usuários
+. profile - Exibir o perfil básico dos usuários
+
+=== Configuração do Okta
+
+Faça login em sua conta Okta.
+
+No menu do lado esquerdo, clique em "`Applications -> Applications "` No painel central, clique em "`Create App Integration`":
+
+image:okta1.png[criar]
+
+Um novo painel será exibido para selecionar o "`Sign-in method`":
+
+image:okta2.png[newapp]
+
+Selecione a opção "`OIDC -- OpenID Connect`".
+
+Será exibido um painel derivado para a seleção "`Application Type`":
+
+image:okta3.png[apptype]
+
+Selecione a opção "`Native Application`".
+
+O painel central mostrará o formulário Native App Integration, no qual você deverá preencher os seguintes valores:
+
+Para a seção Configurações gerais:
+
+Aplicativo. Nome da integração: Nome para essa integração. Escolha livremente qualquer nome Grant Type (marque):
+
+* Código de autorização
+* Token de atualização
+* Senha do proprietário do recurso
+* Implícito (híbrido)
+
+Para a seção URIs de redirecionamento de login:
+
+Acesse o console {product-name} e navegue até "`Settings`" -> "`OpenId Connect Settings`".  Na parte superior da página, ao lado do rótulo "`OpenID Connect Redirect URI`", clique em "`Copy to Clipboard`".
+
+image:okta4.png[cópia]
+
+Isso copiará o URI de redirecionamento para a memória.
+Cole-o em sua caixa de texto correspondente:
+
+image:okta5.png[paste]
+
+Para a seção Atribuições:
+
+Selecione "`Allow everyone in your organization to access`" para ter essa integração disponível para todos em sua organização.
+
+image:okta6.png[atribuições]
+
+Em seguida, clique no botão salvar na parte inferior da página.
+
+Depois que as configurações gerais forem salvas, você será levado à configuração da integração do novo aplicativo e um ID de cliente será gerado automaticamente.
+
+Na seção "`Client Credentials`", clique em editar e modifique a seção "`Client Authentication`" de "`Use PKCE (for public clients)`" para "`Use Client Authentication`" e clique em salvar. Isso gerará automaticamente um novo segredo que será necessário nas próximas etapas de configuração do {product-name}:
+
+image:okta7.png[clientauth]
+
+Navegue até a guia "`Sign On`" e edite a seção "`OpenID Connect ID Token`":
+Altere o emissor de "`Dynamic (based on request domain)`" para o fixo "`Okta URL`":
+
+image:okta8.png[token]
+
+O console Okta pode operar em dois modos: Modo Clássico e Modo Desenvolvedor.
+No modo clássico, a URL do emissor está localizada na guia Sign On da página do aplicativo Okta. Para que a associação ao grupo do usuário seja retornada na reivindicação, é necessário adicionar o escopo "groups" na página de configuração do {product-name} OpenID Connect:
+
+image:okta9.png[reivindicações]
+
+No Modo Desenvolvedor, o Okta permite que você personalize as reivindicações. Isso é feito na página da API, gerenciando os Servidores de Autorização (navegue até o menu à esquerda -> Security -> API). O URL do emissor está localizado na guia Configurações de cada servidor de autorização:
+
+image:okta10.png[api]
+
+As reivindicações são pares de nome/valor que contêm informações sobre um usuário, bem como meta-informações sobre o serviço OIDC.
+Na seção "`OpenID Connect ID Token`", é possível criar novas reivindicações para os Grupos de usuários e transportar a reivindicação no Token de ID (um Token de ID é um Token da Web JSON, um meio compacto e seguro de URL de representar reivindicações a serem transferidas entre duas partes, de modo que as informações de identidade sobre o usuário são codificadas diretamente no token e o token pode ser verificado definitivamente para provar que não foi adulterado). Se um escopo específico estiver configurado, certifique-se de adicionar o escopo à página de configuração do {product-name} OpenID Connect, para que a reivindicação possa ser incluída depois que o usuário for autenticado:
+
+image:okta11.png[scopes]
+
+Por padrão, o site {product-name} procura por "groups" na reivindicação para identificar a associação do usuário ao grupo. Se outro nome de reivindicação for usado, você poderá personalizar o nome da reivindicação na página de configuração do OpenID Connect do {product-name}. Para configurar reivindicações, edite a seção "`OpenID Connect ID Token`", conforme mostrado na próxima imagem:
+
+image:okta12.png[reivindicações]
+
+Na página de integração do aplicativo, navegue até a guia "`Assignments`" e verifique se as atribuições correspondentes estão listadas:
+
+image:okta13.png[atribuições]
+
+=== {product-name} Configuração do OpenID Connect
+
+Configure o URL do emissor, o ID do cliente e o segredo do cliente adequados na página.
+
+image:openid9.png[OpenID9]
+
+Depois que o usuário é autenticado, a função adequada pode ser derivada com a configuração de mapeamento de função baseada em grupo. Para configurar o mapeamento de funções baseado em grupos,
+
+. Se o mapeamento de função baseado em grupo não estiver configurado ou se os grupos correspondentes não puderem ser localizados, o usuário autenticado será atribuído à função Padrão. Se a função Padrão estiver definida como Nenhum, quando o mapeamento de função baseado em grupo falhar, o usuário não poderá fazer login.
+. Especifique uma lista de grupos, respectivamente, no mapa de funções Admin e Reader. A associação do usuário ao grupo é retornada pelas declarações no token de ID depois que o usuário é autenticado. Se o grupo correspondente for localizado, a função correspondente será atribuída ao usuário.
+
+O grupo pode ser mapeado para a função Admin em {product-name}. Os usuários individuais podem ser "promovidos" a uma função de administrador federado fazendo login como administrador de cluster local, selecionando o usuário com o provedor de identificação "OpenID" e editando sua função em Configurações -> Users/Roles.
+
+=== Mapeamento de grupos para funções e espaços de nome
+
+Consulte a seção xref:users.adoc#_mapping_groups_to_roles_and_namespaces[Usuários e funções] para saber como mapear grupos para funções predefinidas e personalizadas, bem como namespaces em {product-name}.
