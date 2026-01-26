@@ -1,0 +1,139 @@
+= OpenID Connect Azure/Okta
+:revdate: 2024-09-27
+:page-revdate: {revdate}
+:page-opendocs-origin: /08.integration/07.openid/07.openid.md
+:page-opendocs-slug:  /integration/openid
+
+== 集成 OpenID Connect (OIDC) for Azure 和 Okta
+
+要启用 OpenID Connect 身份验证，需要设置 "*发行者*"、"*客户端 ID*"和 "*客户端秘密*"。有了发行方 URL，{product-name} 就会调用发现应用程序接口来检索认证、令牌和用户信息端点。
+
+在{product-name} OpenID Connect 设置页面顶部找到 OpenID Connect 重定向 URI。您需要将此 URI 复制到 Okta 的*登录重定向 URI*和 Microsoft Azure 的*回复 URL*。
+
+image:openid1.png[OpenID1]
+
+=== 微软 Azure 配置
+
+在 Azure Active Directory > 应用程序注册 > 应用程序名称 > 设置页面中，找到应用程序 ID 字符串。用于在{product-name} 中设置客户 ID。客户端密文可在 Azure 的密钥设置中找到。
+
+image:openid3.png[OpenID3]
+
+发行方 URL 采用 "https://login.microsoftonline.com/{tenantID}/v2.0 "格式。要找到租户 ID，请访问menu:Azure Active DirectoryProperties[页面]并找到目录 ID，然后将其替换为 URL 中的租户 ID
+
+image:openid4.png[OpenID4]
+
+如果用户已分配到活动目录中的组，则可将其组成员身份添加到申请中。在*Azure Active Directory-> 应用程序注册*中查找应用程序并编辑清单。将 "groupMembershipClaims "的值修改为 "Application Group"。 一个标记中最多可包含几个组。 如果用户属于大量组（大于 200 个），而使用的值是 "全部"，则令牌将不包括这些组，授权将失败。 使用 "应用程序组 "值而不是 "全部 "值，将减少令牌中返回的适用组的数量。
+
+默认情况下，{product-name} 会在请求中查找 "群组"，以确定用户的群组成员身份。如果使用其他主张名称，可以在{product-name} 的 OpenID Connect 设置页面中自定义主张名称。
+
+Azure 返回的组要求是用 "对象 ID "而不是名称来标识的。组的对象 ID 可在menu:Azure Active[DirectoryGroups > 组名称页面]中找到。应使用此值在{product-name} -> 设置中配置基于组的角色映射。
+
+image:openid5.png[OpenID5]
+
+==== 验证权限
+
+确保在 Microsoft 图形中设置了以下权限
+
+. 电子邮件 - 查看用户的电子邮件地址
+. openid - 登录用户
+. 配置文件 - 查看用户的基本配置文件
+
+=== Okta 配置
+
+登录您的 Okta 账户。
+
+在左侧菜单中，单击"`应用程序-> Applications "` 在中心窗格中，单击"`Create App Integration`" ：
+
+image:okta1.png[创建]
+
+将弹出一个新窗格，选择"`Sign-in method`" ：
+
+image:okta2.png[新应用程序]
+
+选择"`OIDC -- OpenID Connect`" 选项。
+
+将出现一个派生窗格，供"`Application Type`" 选择：
+
+image:okta3.png[应用类型]
+
+选择"`Native Application`" 选项。
+
+现在，中央窗格将显示本地应用程序集成表单，您必须相应填写以下值：
+
+常规设置部分：
+
+应用程序集成名称：该集成的名称。自由选择任何名称 授予类型（打勾）：
+
+* 授权码
+* 刷新令牌
+* 资源所有者密码
+* 隐式（混合式）
+
+登录重定向 URI 部分：
+
+进入{product-name} 控制台，导航至"`Settings`" -> "`OpenId Connect Settings`" 。 在页面顶部"`OpenID Connect Redirect URI`" 标签旁边单击"`Copy to Clipboard`" 。
+
+image:okta4.png[抄袭]
+
+这将把重定向 URI 复制到内存中。
+将其粘贴到相应的文本框中：
+
+image:okta5.png[paste]
+
+作业部分：
+
+选择"`Allow everyone in your organization to access`" ，您组织中的每个人都可以使用该集成。
+
+image:okta6.png[assignments]
+
+然后点击页面底部的保存按钮。
+
+保存常规设置后，您将进入新的应用程序集成设置，并自动生成客户 ID。
+
+在"`Client Credentials`" 部分，点击编辑并将"`Client Authentication`" 部分从"`Use PKCE (for public clients)`" 修改为"`Use Client Authentication`" ，然后点击保存。这将自动生成一个新的密文，我们在接下来的{product-name} 设置步骤中将需要它：
+
+image:okta7.png[clientauth]
+
+导航至"`Sign On`" 选项卡并编辑"`OpenID Connect ID Token`" 部分：
+将发行人从"`Dynamic (based on request domain)`" 改为固定的"`Okta URL`" ：
+
+image:okta8.png[象征性]
+
+Okta 控制台有两种运行模式：经典模式和开发者模式。
+在传统模式下，发行方 URL 位于 Okta 应用页面的登录标签页。要在声明中返回用户的群组成员身份，需要在{product-name} OpenID Connect 配置页面中添加 "群组 "范围：
+
+image:okta9.png[申索]
+
+在开发者模式下，Okta 允许您自定义索赔。这可以在 API 页面通过管理授权服务器来实现（导航至左侧菜单-> Security-> API）。发行方 URL 位于每个授权服务器的 "设置 "选项卡中：
+
+image:okta10.png[api]
+
+请求是包含用户信息和 OIDC 服务元信息的名称/值对。
+在"`OpenID Connect ID Token`" 部分，您可以为用户组创建新的权利要求，并在 ID 令牌中携带该权利要求（ID 令牌是一种 JSON 网络令牌，是在双方之间传输权利要求的一种紧凑的 URL 安全表示方法，因此用户的身份信息直接编码到令牌中，而且令牌可以被明确验证，以证明未被篡改）。如果配置了特定范围，请务必将该范围添加到{product-name} OpenID Connect 设置页面，以便在用户通过身份验证后将声明包括在内：
+
+image:okta11.png[瞄准镜]
+
+默认情况下，{product-name} 会在请求中查找 "群组"，以确定用户的群组成员身份。如果使用其他主张名称，可以在{product-name} 的 OpenID Connect 设置页面中自定义主张名称。要配置索赔，请编辑"`OpenID Connect ID Token`" 部分，如下图所示：
+
+image:okta12.png[申索]
+
+在应用程序集成页面，导航至"`Assignments`" 选项卡，确保列出了相应的任务：
+
+image:okta13.png[assignments]
+
+=== {product-name} OpenID Connect 配置
+
+在页面中配置适当的发行方 URL、客户端 ID 和客户端密文。
+
+image:openid9.png[OpenID9]
+
+用户通过身份验证后，可通过基于组的角色映射配置获得适当的角色。设置基于组的角色映射、
+
+. 如果未配置基于组的角色映射，或无法找到匹配的组，则会将已验证用户分配为默认角色。如果默认角色设置为 "无"，当基于组的角色映射失败时，用户将无法登录。
+. 分别在管理员和读者角色映射中指定组列表。在用户通过身份验证后，ID 令牌中的权利要求会返回用户的用户组成员身份。如果找到了匹配的组，就会为用户分配相应的角色。
+
+该组可映射到{product-name} 中的管理员角色。单个用户可 "晋升 "为联邦管理员角色，方法是以本地群集管理员身份登录，选择身份识别提供者为 "OpenID "的用户，并在设置-> 用户/角色中编辑其角色。
+
+=== 将组映射到角色和命名空间
+
+有关如何在{product-name} 中将组映射到预设和自定义角色以及命名空间，请参阅 "xref:users.adoc#_mapping_groups_to_roles_and_namespaces[用户和]角色 "部分。
