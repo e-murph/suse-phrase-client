@@ -1,0 +1,90 @@
+= OpenMetrics
+:revdate: 2025-07-10
+:page-revdate: {revdate}
+:description: SUSE 可观察性
+
+== 概述
+
+SUSE Observability Agent V2 可配置为从 OpenMetrics 端点检索指标并将其推送到 SUSE Observability。
+
+== 设置
+
+=== 安装
+
+OpenMetrics 检查包含在 [Agent V2 StackPack] 中。
+
+=== 配置
+
+要启用 OpenMetrics 集成并开始从 OpenMetrics 端点收集度量数据，必须在 SUSE Observability Agent V2 上配置 OpenMetrics 检查。检查配置提供了代理连接到 OpenMetrics 端点并检索可用度量指标所需的所有详细信息。
+
+[tabs]
+====
+Kubernetes, OpenShift::
++
+--
+
+. 在 Kubernetes 或 OpenShift 集群上部署代理。
+. 在启动通过 OpenMetrics 端点公开度量指标的 pod 时，添加以下注释。添加以下内容
+ ** **+++<CONTAINER_NAME>+++** - 公开 OpenMetrics 的容器的名称。在一个 pod 中可以处理多个端点（这就是为什么 JSON 中会有一个列表）。+++</CONTAINER_NAME>+++
+ ** *prometheus_url*- OpenMetrics 端点的路径（通常只有`metrics` ）和端口。
+ ** *命名空间*\--在此收集的所有度量指标都将以此作为点分隔前缀。
+ ** *metrics*- 使用`["*"]` 收集所有可用指标。还可以指定要获取的指标列表。这应该是代表度量名称的字符串，或者是重新命名度量的映射+``<EXPOSED_METRIC>:````<SENT_METRIC>+``
++
+[,yaml]
+----
+ ...
+ metadata:
+   annotations:
+     ad.stackstate.com/<CONTAINER_NAME>.check_names: '["openmetrics"]'
+     ad.stackstate.com/<CONTAINER_NAME>.init_configs: '[{}]'
+     ad.stackstate.com/<CONTAINER_NAME>.instances: |
+       [
+         {
+           "prometheus_url": "http://%%host%%:<METRICS_PORT>/<METRICS_PATH>",
+           "namespace": "<METRICS_NAMESPACE>",
+           "metrics": ["*"]
+         }
+       ]
+ ...
+ # This already exists in the pod spec, the container name needs to match the container that is exposing the openmetrics endpoint
+ spec:
+   containers:
+    - name: <CONTAINER_NAME>
+ ...
+----
+. 您还可以添加可选配置和过滤器：
+ ** *prometheus_metrics_prefix*- 添加到暴露的 OpenMetrics 指标的前缀。
+ ** *health_service_check*- 发送服务检查`<NAMESPACE>.prometheus.health` ，报告 OpenMetrics 端点的健康状况。默认`true`.
+ ** *label_too_hostname*- 用一个标签的值覆盖主机名。
+ ** *label_joins*- 以度量指标为目标，通过 1:1 映射检索其标签
+ ** *labels_mapper*- 重新命名标签。格式为`<LABEL_TO_RENAME>: <NEW_LABEL_NAME>` 。
+ ** *type_overrides*- 覆盖 OpenMetrics 有效载荷中的某一类型，或覆盖无类型度量的类型（默认情况下将忽略这些类型）。支持的`<METRIC_TYPE>` 有`gauge` 、`count` 和`rate` 。格式为`<METRIC_NAME>: <METRIC_TYPE>` 。
+ ** *tags*-*标签*列表，用于为本集成发出的每个度量、事件和服务检查附加标签。
+ ** *send_histograms_buckets*- 发送直方图数据包。默认`true`.
+ ** *send_monotonic_counter*- 设置为`true` ，以便将计数器转换为速率（注意，需要运行两次才能产生第一个结果）。设置为`false` 可将计数器作为单调计数器发送。默认`true`.
+ ** *exclude_labels*- 要排除的标签列表。
+ ** *prometheus_timeout*- 设置 OpenMetrics 查询的超时时间。
+ ** *ssl_cert*- 如果 OpenMetrics 端点已加密，请输入证书路径，并在`ssl_private_key` 参数中指定私钥，或提供包含证书和私钥的文件路径。
+ ** *ssl_private_key*- 如果`ssl_cert` 中链接的证书不包括私钥，则必填。请注意，本地证书的私钥必须是未加密的。
+ ** *ssl_ca_cert*- 用于生成自定义证书的受信任 CA 的路径。
+ ** *extra_headers*- 将 HTTP 标头名称映射为相应值的字典，以便在向 OpenMetrics 端点发送查询时使用。这些值可以使用`%%env_VARIABLE%%` 语法动态包含环境变量。例如，`"Authorization: Bearer %%env_TOKEN%%"` 会自动替换`TOKEN` 环境变量的值。
+. 等待代理从 OpenMetrics 端点收集数据并将其发送到 SUSE Observability。
+
+--
+====
+
+== 收集的数据
+
+=== 衡量标准
+
+默认情况下，所有指标都从指定的 OpenMetrics 端点获取。为优化性能，最多将检索 2000 个指标。如果检查试图检索超过 2000 个指标，请在<<_configuration,配置>>中添加`metrics` 过滤器，以确保在限制范围内检索到所有重要指标。
+
+检索到的度量不会自动映射到拓扑元素，但可以使用xref:/use/metrics/k8sTs-explore-metrics.adoc[遥测检查器]浏览它们，并最终xref:/use/metrics/k8s-add-charts.adoc[通过度量绑定添加到组件中]。
+
+=== 活动
+
+OpenMetrics 集成不检索任何事件数据。
+
+=== 痕迹
+
+OpenMetrics 集成不检索跟踪数据。
