@@ -1,0 +1,178 @@
+= 调试健康同步
+:revdate: 2025-07-10
+:page-revdate: {revdate}
+:description: SUSE 可观察性
+
+== 概述
+
+xref:/setup/cli/cli-sts.adoc[SUSE Observability CLI]可用于对健康同步进行故障诊断，并修复可能导致无法在 SUSE Observability 中正确摄取和显示健康数据的问题。本页介绍调试健康同步时的一般故障排除步骤、使用的 CLI 命令以及返回的错误信息说明。
+
+== 一般故障排除步骤
+
+在调试健康同步时，无论具体问题是什么，都可以采取一些常见的验证步骤：
+
+. xref:/configure/health/debug-health-sync.adoc#_list_streams[验证数据流是否存在]。
+. 如果使用子流，请xref:/configure/health/debug-health-sync.adoc#_list_sub_streams[确认子流是否存在]。回复还将显示子流的检查状态数。这可以让你知道数据是否正在被摄取和处理。
+. 进一步调查：
+ ** *Stream present*-xref:/configure/health/debug-health-sync.adoc#_show_stream_status[检查数据流状态]，这将显示数据流的指标延迟和任何xref:/configure/health/debug-health-sync.adoc#_error_messages[错误]。
+ ** *存在数据流/子数据流，但没有检查状态*- 确认发送到接收方 API 的有效载荷符合xref:/configure/health/send-health-data/send-health-data.adoc[健康有效载荷规范]。
+ ** *没有流/子流*- 使用下面的 CLI 命令验证发送到接收器 API 的健康数据是否到达 SUSE Observability：
+
+[,sh]
+----
+$ sts topic describe --name sts_health_sync
+----
+
+== 常见问题
+
+=== 检查状态在组件上不可见
+
+在 SUSE Observability 中，检查状态不显示在组件上有两种原因：
+
+* 健康检查状态尚未创建。按照xref:/configure/health/debug-health-sync.adoc#_general_troubleshooting_steps[一般故障排除步骤]，确认流/子流已创建，且数据已到达 SUSE Observability。
+* 健康检查状态已创建，但其`topologyElementIdentifier` 与 SUSE Observability 拓扑中的任何`identifiers` 都不匹配。使用 CLI 命令xref:/configure/health/debug-health-sync.adoc#_show_substream_status[show substream status]来验证是否有任何`Check states with identifier which has no matching topology element` 。
+
+=== SUSE Observability 中的检查状态更新缓慢
+
+主要原因是健康同步的延迟比预期的要高。使用 CLI 命令xref:/configure/health/debug-health-sync.adoc#_show_stream_status[show stream status]来确认数据流的延迟以及报文和特定检查操作的吞吐量。可能有必要调整向健康同步系统发送的数据或发送数据的频率。
+
+== 有用的 CLI 命令
+
+=== 列表流
+
+返回当前所有同步健康信息流的列表，以及每个健康信息流中包含的子信息流的数量。
+
+[,sh]
+----
+$ sts health list
+STREAM URN                                              | STREAM CONSISTENCY MODEL | SUB STREAM COUNT
+urn:health:sourceId:streamId                            | REPEAT_SNAPSHOTS         | 1
+----
+
+=== 列出子流
+
+返回给定数据流 URN 的所有子数据流列表，以及每个子数据流的检查状态数。
+
+[,sh]
+----
+$ sts health list -u urn:health:sourceId:streamId
+SUB STREAM ID  | CHECK STATE COUNT
+subStreamId1   | 1
+subStreamId2   | 1
+----
+
+=== 显示数据流状态
+
+数据流状态命令返回汇总的数据流延迟和吞吐量指标。这有助于调试为什么健康检查需要很长时间才能检测到预期的拓扑元素。这将有助于诊断是否应调整向 SUSE Observability 发送数据的频率。输出包括一个`Errors for non-existing sub streams:` 部分，因为有些错误只有在无法创建子流时才会出现，例如`StreamMissingSubStream` 。子流错误可以是任何记录的xref:/configure/health/debug-health-sync.adoc#_error_messages[错误信息]。
+
+[,sh]
+----
+$ sts health status -u urn:health:sourceId:streamId
+----
+
+=== 显示子流状态
+
+子流状态提供了有用的信息，可用于验证 SUSE Observability 是否能将外部系统发送的检查状态与现有拓扑元素绑定。这些信息有助于调试为什么在预期拓扑元素上看不到特定检查。
+
+[,sh]
+----
+$ sts health status -u urn:health:sourceId:streamId -sub-stream-urn subStreamId3
+----
+
+[NOTE]
+====
+子流状态将显示与一致性模型相关的元数据：
+
+* *重复快照*- 显示重复间隔和到期时间
+* *事务增量*- 显示检查点偏移和检查点批次索引
+====
+
+
+子流状态可通过`-t` 命令行参数进行扩展，以包括匹配和未匹配检查状态的详细信息。这有助于识别未连接到拓扑元素的任何健康状态。
+在下面的示例中，`checkStateId2` 列在`Check states with identifier which has no matching topology element` 下。这意味着无法将检查状态与具有标识符`server-2` 的拓扑元素相匹配。
+
+[,sh]
+----
+$ sts health status -u urn:health:sourceId:streamId -sub-stream-urn subStreamId3 -t
+----
+
+=== 删除健康数据流
+
+`delete` 流功能有助于在 SUSE Observability 中设置健康同步。您可以用它来做实验，删除数据，然后重新开始，干净利落。当您确定不想继续使用某个数据流时，也可以删除该数据流并丢弃其数据。
+
+[,sh]
+----
+$ sts health delete -u urn:health:sourceId:streamId
+----
+
+=== 清除健康数据流错误
+
+`clear-errors` 选项会删除健康数据流中的所有错误。这对在 SUSE Observability 中设置健康同步很有帮助，对于`TRANSACTIONAL_INCREMENTS` 一致性模型来说，当某些错误无法自然消除时也很有帮助。例如，如果 SUSE Observability 不知道某个检查状态，则删除该检查状态的请求可能会引发错误。抑制这种错误的唯一方法是使用`clear-errors` 命令。
+
+[,sh]
+----
+$ sts health clear-error -u urn:health:sourceId:streamId
+----
+
+== 错误信息
+
+[NOTE]
+====
+一旦所述问题得到解决，错误将被关闭。
+
+例如，一旦健康同步观测到启动快照信息，随后又观测到停止快照信息，`SubStreamStopWithoutStart` 就会关闭。
+====
+
+
+|===
+| 错误 | 说明
+
+| *StreamMissingSubStream*
+| 当健康同步接收到的报文中没有之前的流设置报文`start_snapshot` 或`expiry` 时发生。
+
+| *StreamConsistencyModelMismatch*
+| 当收到的报文属于与创建流时指定的一致性模型不同的一致性模型时发生。
+
+| *StreamMissingSubStream*
+| 当健康同步接收到带有上一个启动快照的信息时发生。
+
+| *SubStreamRepeatIntervalTooHigh*
+| 当健康同步接收到的`repeat_interval_s` 超过配置的最长 30 分钟时触发。
+
+| *SubStreamStartWithoutStop*
+| 当健康同步接收到第二个信息要打开快照时发生，而之前的快照仍处于打开状态。
+
+| *SubStreamCheckStateOutsideSnapshot*
+| 当健康同步在未打开快照的情况下接收外部检查状态时发生。
+
+| *SubStreamStopWithoutStart*
+| 当健康同步接收到停止快照消息而根本没有启动快照时发生。
+
+| *SubStreamMissingStop*
+| 当健康同步在超过开始快照消息中确定的`repeat_interval_s` 的两倍超时时间后仍未收到停止快照时发生。在这种情况下，将应用自动停止快照。
+
+| *SubStreamExpired*
+| 当健康同步停止接收特定子流数据的时间超过配置的`expiry_interval_s` 时发生。在这种情况下，子流将被删除。
+
+| *SubStreamLateData*
+| 当健康同步未根据已建立的`repeat_interval_s` 及时接收完整快照时发生。
+
+| *SubStreamTransformerError*
+| 当健康同步无法解释发送给接收器的有效载荷时发生。例如，"缺少必填字段'姓名'"，有效载荷为`{"checkStateId":"checkStateId3","health":"deviating","message":"Unable to provision the device. ","topologyElementIdentifier":"server-3"}` ，转换为`Default Transformation` 。
+
+| *SubStreamMissingCheckpoint*
+| 当事务递增子流先前观察到检查点，但接收到的报文缺少 `previous_checkpoint`
+
+| *SubStreamInvalidCheckpoint*
+| 当事务增量子流先前观察到一个检查点，但接收到的报文`previous_checkpoint` 与上次观察到的不等同时发生。
+
+| *SubStreamOutdatedCheckpoint*
+| 当事务增量子流先前观察到一个检查点，但接收到的报文的`checkpoint` 在上次观察到的报文之前，即 SUSE Observability 已经接收到其数据时发生此故障。
+
+| *SubStreamUnknownCheckState*
+| 当删除事务增量 check_state 且`check_state_id` 不在子流上时发生。
+|===
+
+== 另见
+
+* xref:/setup/cli/cli-sts.adoc[安装 SUSE Observability CLI]

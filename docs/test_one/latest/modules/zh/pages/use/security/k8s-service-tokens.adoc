@@ -1,0 +1,190 @@
+= 服务令牌
+:revdate: 2025-07-22
+:page-revdate: {revdate}
+:description: SUSE 可观察性
+
+== 概述
+
+使用服务令牌可以在没有相关用户账户的情况下验证 SUSE Observability。这对于希望从无头服务（如 CI 服务器）使用 SUSE Observability 的情况非常有用。在这种情况下，你通常不希望在身份供应商中提供用户账户。
+
+== 管理服务令牌
+
+服务令牌可通过`sts` CLI 进行管理。可使用以下命令
+
+[,sh]
+----
+> sts service-token --help
+Manage service tokens.
+
+Usage:
+  sts service-token [command]
+
+Available Commands:
+  create      Create a service token
+  delete      Delete a service token
+  list        List service tokens
+
+Use "sts service-token [command] --help" for more information about a command.
+----
+
+=== 创建服务令牌
+
+[NOTE]
+====
+Open Telemetry 和 Kubernetes StackPacks 可让您创建一个主题和服务令牌，并设置好所有必要的权限。
+====
+
+要在 SUSE Observability 实例中创建服务令牌，可以使用`sts` CLI。
+
+[,sh]
+----
+sts service-token create
+----
+
+[NOTE]
+====
+请注意，服务令牌只会显示一次。不可能再看到令牌了。
+====
+
+
+该命令需要以下命令行参数：
+
+|===
+| 旗帜 | 说明
+
+| `--name`
+| 服务令牌的名称
+
+| `--expiration`
+| 服务令牌的到期日期，格式为 yyyy-MM-dd。过期是可选项。
+
+| `--roles`
+| 以逗号分隔的角色列表，用于为服务令牌分配角色
+|===
+
+例如，下面的命令将创建一个名称为`my-service-token` 、角色为`stackstate-k8s-troubleshooter` 的服务令牌：
+
+[,sh]
+----
+> sts service-token create --name my-service-token --roles stackstate-k8s-troubleshooter
+✅ Service token created: svctok-aaaaa-bbbb-ccccc-ddddd
+----
+
+=== 列出服务令牌
+
+使用`sts` CLI 可以查看所有已创建服务令牌的 ID、名称、过期日期和角色。例如
+
+[,bash]
+----
+> sts service-token list
+ID              | NAME             | EXPIRATION | ROLES
+107484341630693 | my-service-token |            | [stackstate-k8s-troubleshooter]
+----
+
+=== 删除服务令牌
+
+可使用`sts` CLI 删除服务令牌。将服务令牌的 ID 作为参数传递。例如
+
+[,sh]
+----
+> sts service-token delete 107484341630693
+✅ Service token deleted: 107484341630693
+----
+
+== 使用服务令牌进行身份验证
+
+服务令牌创建后，可用于从无头服务验证 SUSE Observability。为此，您可以使用 CLI 或直接与 API 对话。
+
+=== SUSE Observability`sts` CLI
+
+服务令牌可用于新的`sts` CLI 的身份验证。
+
+[,sh]
+----
+> sts context --name <name> --service-token <TOKEN> --url https://<tenant>.app.stackstate.io
+----
+
+=== SUSE Observability API
+
+要使用服务令牌直接与 SUSE Observability API 对话，请通过以下方式之一将其添加到请求的标题中：
+
+* 在`Authorization` 标头中：
++
+[,sh]
+----
+  > curl -X GET -H "Authorization: ApiKey <TOKEN>" http://<tenant>.app.stackstate.io/api/server/status
+----
+
+* 在`X-API-Key` 标头中：
++
+[,sh]
+----
+  > curl -X GET -H "X-API-Key: <TOKEN>" http://<tenant>.app.stackstate.io/api/server/status
+----
+
+
+== 使用服务令牌为数据输入进行身份验证
+
+要创建用于数据摄取的服务令牌，首先需要为此创建一个专用角色：
+[,sh]
+----
+> sts rbac create-subject --subject my-agent
+✅ Created subject 'my-agent'
+> sts rbac grant --subject my-agent --permission update-metrics
+✅ Granted permission 'update-metrics' on 'system' to subject 'my-agent'
+PERMISSION   | RESOURCE
+update-metrics | system
+----
+
+如果要使用服务令牌摄取 Kubernetes RBAC 数据，还需要授予`update-scoped-permissions` ：
+[,sh]
+----
+> sts rbac grant --subject my-agent --permission update-scoped-permissions --resource my-cluster
+✅ Granted permission 'update-scoped-permissions' on 'my-cluster' to subject 'my-agent'
+PERMISSION                | RESOURCE
+update-metrics            | system
+update-scoped-permissions | my-cluster
+----
+
+这将在 SUSE Observability 中创建一个名为`my-agent` 的新角色，并授予其`update-metrics` 权限。然后，您就可以为该角色创建一个 ServiceToken：
+
+[,sh]
+----
+> sts service-token create --name my-agent --roles my-agent
+✅ Service token created: svctok-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+----
+
+新创建的服务令牌可用来进行身份验证：
+
+* SUSE 可观察性代理
+* OTel 收集器
+
+=== SUSE 可观察性代理
+
+SUSE Observability 代理需要一个 API 密钥才能进行通信，历史上称为接收器 API 密钥。SUSE Observability 现在提供两种身份验证选项：
+
+* 接收器 API 密钥：该密钥通常在初始安装 SUSE Observability 实例时生成、
+* 服务令牌：您可以使用 SUSE Observability CLI (STS) 创建服务令牌。这些密钥有有效期，需要定期轮换才能继续使用。
+
+=== OTel 收集器
+
+使用 SUSE Observability 收集器时，您需要在配置中包含`Authorization` 头文件。收集器接受接收器 API 密钥或服务令牌进行身份验证。
+下面的代码片段提供了一个配置示例：
+
+[,yaml]
+----
+extensions:
+  bearertokenauth:
+    scheme: SUSE Observability
+    token: "${env:API_KEY}"
+exporters:
+  otlp/suse-observability:
+    auth:
+      authenticator: bearertokenauth
+    endpoint: <otlp-suse-observability-endpoint>:443
+  # or
+  otlphttp/suse-observability:
+    auth:
+      authenticator: bearertokenauth
+    endpoint: https://<otlp-http-suse-observability-endpoint>
+----
