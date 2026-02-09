@@ -1,0 +1,29 @@
+= 应用程序接口密钥
+:revdate: 2025-07-22
+:page-revdate: {revdate}
+:description: SUSE 可观察性
+
+API 密钥主要用于验证{stackstate-product-name} ，以便向{stackstate-product-name} 发送遥测数据。在安装 helm 代理时，可通过设置`stackstate.apiKey` helm 变量来实现。
+
+您可以按照xref:/k8s-suse-rancher-prime.adoc#_installing_the_suse_observability_agent[StackPack 安装流程]获取 API 密钥，该流程使用平台提供的服务令牌。
+
+您还可以通过以下方式从平台获取 API 密钥：
+
+* **服务令牌**- 使用此键确定要摄取的数据范围。安装xref:/setup/security/rbac/rbac_rancher.adoc[Rancher RBAC 支持]时需要服务令牌。它还提供过期日期。更多信息，请参阅xref:/use/security/k8s-service-tokens.adoc#_authenticate_using_service_tokens_for_data_ingestion[服务令牌]。
+* **引导服务令牌**- 使用此 API 密钥为数据摄取和 RBAC 设置服务令牌。这是安装前创建密钥的首选方法。有关详细信息，请参阅xref:/setup/security/authentication/service_tokens.adoc#_set_up_a_bootstrap_service_token[Bootstrap 服务令牌]。
+* **接收器 API 密钥**- 该密钥在初始安装{stackstate-product-name} 实例时生成，永不过期。由于它没有范围限制，因此可用于所有代理。
+
+[NOTE]
+====
+从长远来看，这种方法将被取代，因为 RBAC 数据无法通过接收器 API 密钥摄取。
+====
+* **摄取 API 密钥**（已废弃）- 您可以使用{stackstate-product-name} CLI (STS) 创建摄取 API 密钥。这些密钥有有效期，需要定期轮换才能继续使用。
+
+== 输入应用程序接口密钥 (`Deprecated`)
+
+外部工具使用导入 API 密钥向 SUSE Observability 集群导入数据（如指标、事件和跟踪）。
+这些工具包括 STS Agent 或/和 OTel Collector。推荐使用的身份验证机制是xref:/use/security/k8s-service-tokens.adoc#_authenticate_using_service_tokens_for_data_ingestion[服务令牌]。
+
+== 更多信息
+
+* xref:/use/security/k8s-service-tokens.adoc[服务令牌]
