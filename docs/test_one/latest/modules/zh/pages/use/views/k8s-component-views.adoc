@@ -1,0 +1,4 @@
+= 组件视图
+:revdate: 2025-07-10
+:page-revdate: {revdate}
+:description: SUSE 可观察性
