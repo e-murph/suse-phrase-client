@@ -1,0 +1,29 @@
+= API Keys
+:revdate: 2025-07-22
+:page-revdate: {revdate}
+:description: SUSE Observability
+
+An API key is primarily used to authenticate against {stackstate-product-name} for sending telemetry data to {stackstate-product-name}. In a helm agent install, this is done by setting the `stackstate.apiKey` helm variable.
+
+You can obtain an API key by following the xref:/k8s-suse-rancher-prime.adoc#_installing_the_suse_observability_agent[StackPack install flow], which uses a Service Token from the platform. 
+
+You can also obtain an API Key in the following ways from the platform:
+
+* **Service Token** - Use this key to scope the data to be ingested. A service token is required when installing with xref:/setup/security/rbac/rbac_rancher.adoc[Rancher RBAC support]. It also offers expiration dates. For more information, see xref:/use/security/k8s-service-tokens.adoc#_authenticate_using_service_tokens_for_data_ingestion[Service Tokens].
+* **Bootstrap Service Token** - Use this API key to set up a service token for data ingestion and RBAC. This is the preferred method to create a key before installation. For more information, see xref:/setup/security/authentication/service_tokens.adoc#_set_up_a_bootstrap_service_token[Bootstrap Service Tokens].
+* **Receiver API Key** - This key is generated during the initial installation of your {stackstate-product-name} instance and it never expires. As it is not scoped, it can be used for all agents. 
+
+[NOTE]
+====
+This method will be replaced in the long run as the RBAC data cannot be ingested with the receiver API Key.
+====
+* **Ingestion API Key** (Deprecated) - You can create Ingestion API Keys using the {stackstate-product-name} CLI (STS). These keys offer expiration dates, requiring periodic rotation for continued functionality.
+
+== Ingestion API Keys (`Deprecated`)
+
+Ingestion API Keys were used by external tools to ingest data (such as metrics, events and traces) to the SUSE Observability cluster.
+These tools include the STS Agent or/and OTel Collector. The recommended authentication mechanism is through xref:/use/security/k8s-service-tokens.adoc#_authenticate_using_service_tokens_for_data_ingestion[Service Tokens].
+
+== More info
+
+* xref:/use/security/k8s-service-tokens.adoc[Service tokens]
